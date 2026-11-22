@@ -63,11 +63,12 @@ header h1 { font-family: var(--f-display); font-weight: 700; font-size: 24px; ma
 .team.bidside { border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold); }
 .trumpbox { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 4px 8px; display: flex; align-items: center; gap: 6px; }
 .trumpbox .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 700; }
-.rosette { width: 46px; height: 46px; flex: none; }
-.rosette .petal { fill: var(--gold); }
-.rosette .ring { fill: none; stroke: var(--gold); stroke-width: 3; }
-.rosette .hub { fill: var(--card); }
-.rosette text { font-size: 34px; font-family: var(--f-body); }
+.trumpname { font-weight: 700; font-size: 15px; line-height: 1.2; }
+.trumpname.none { color: var(--muted); font-weight: 400; font-size: 13px; }
+.trumpgoal { font-size: 11px; color: var(--muted); }
+.trumpcard { width: 40px; height: 54px; flex: none; display: grid; place-items: center; background: var(--card); color: var(--card-ink); border-radius: 6px; border: 1px solid rgba(0,0,0,.15); box-shadow: var(--shadow); font-family: var(--f-body); font-size: 38px; line-height: 1; }
+.trumpcard.red { color: var(--card-red); }
+.trumpcard.none { color: var(--muted); font-size: 24px; font-weight: 700; box-shadow: none; }
 
 .contract { font-size: 13px; color: var(--muted); min-height: 1.4em; }
 .contract b { color: var(--ink); }
@@ -202,12 +203,7 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
   <div class="score">
     <div class="team" id="tUs"><span class="lbl" id="usLbl">You &amp; partner</span><span class="num" id="sUs">0</span><span class="sub" id="kUs"></span></div>
     <div class="team" id="tThem"><span class="lbl" id="themLbl">Amos &amp; Esther</span><span class="num" id="sThem">0</span><span class="sub" id="kThem"></span></div>
-    <div class="trumpbox"><div><div class="lbl">Trump</div><div class="contract" id="goal" style="font-size:11px"></div></div><svg class="rosette" viewBox="-50 -50 100 100" aria-label="Trump suit" role="img" id="ros">
-      <circle class="ring" r="46"/>
-      <ellipse class="petal" rx="11" ry="40"/><ellipse class="petal" rx="11" ry="40" transform="rotate(60)"/><ellipse class="petal" rx="11" ry="40" transform="rotate(120)"/>
-      <circle class="hub" r="21"/>
-      <text id="rosT" x="0" y="12" text-anchor="middle">?</text>
-    </svg></div>
+    <div class="trumpbox"><div><div class="lbl">Trump</div><div class="trumpname none" id="trumpName">Not called</div><div class="trumpgoal" id="goal"></div></div><div class="trumpcard none" id="ros" role="img" aria-label="Trump not called yet">?</div></div>
   </div>
   <div class="contract" id="contract"></div>
   <div class="table" id="table">
@@ -1041,10 +1037,12 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
     $('kThem').textContent = inPlay ? `${v.tricks[1]} tricks` : ' ';
     $('tUs').classList.toggle('bidside', v.bidder != null && HP.team(v.bidder) === 0);
     $('tThem').classList.toggle('bidside', v.bidder != null && HP.team(v.bidder) === 1);
-    const rt = $('rosT');
-    rt.textContent = v.trump ? HP.SYM[v.trump] : '?';
-    rt.setAttribute('fill', v.trump ? (isRed(v.trump) ? 'var(--card-red)' : 'var(--card-ink)') : 'var(--muted)');
-    $('ros').setAttribute('aria-label', v.trump ? `Trump is ${HP.NAME[v.trump]}` : 'Trump not called yet');
+    const tc = $('ros'), tn = $('trumpName');
+    tc.textContent = v.trump ? HP.SYM[v.trump] : '?';
+    tc.className = 'trumpcard' + (v.trump ? (isRed(v.trump) ? ' red' : '') : ' none');
+    tc.setAttribute('aria-label', v.trump ? `Trump is ${HP.NAME[v.trump]}` : 'Trump not called yet');
+    tn.textContent = v.trump ? HP.NAME[v.trump] : 'Not called';
+    tn.className = 'trumpname' + (v.trump ? '' : ' none');
 
     let ct = `Hand ${v.handNo} · ${v.dealer === ME ? 'You deal' : nm(v, v.dealer) + ' deals'} · ${({ easy: 'Easy', normal: 'Normal', hard: 'Hard' })[v.level] || 'Normal'} computer players`;
     if (v.bidder != null) {
