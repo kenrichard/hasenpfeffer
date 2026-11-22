@@ -240,7 +240,7 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
 
   function defaults() {
     return {
-      deck: '32',          // '32': J-A doubled, 8 each, no kitty. '48': 9-A doubled, 12 each, no kitty. '64': 7-A doubled, 15 each, 4 kitty
+      deck: '64',          // '64': 7-A doubled, 15 each, 4 kitty. '48': 9-A doubled, 12 each, no kitty. '32': J-A doubled, 8 each, no kitty
       kitty: 'after',      // 'after': call trump then take kitty, 'before': see kitty then call, 'aside': not used
       bowers: true,
       defendersScore: true,
@@ -261,8 +261,8 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
     };
     // computer bidding thresholds: hoss/dhoss are the share of all tricks the hand must be worth alone;
     // safety is taken off a numbered bid. The small deck needs its own numbers (tuned by simulation).
-    const ai = Object.assign({ hoss: 0.62, dhoss: 0.7, safety: 0 }, (DECKS[s.deck] || DECKS['32']).ai);
-    const x = DECKS[s.deck] || DECKS['32'];
+    const ai = Object.assign({ hoss: 0.62, dhoss: 0.7, safety: 0 }, (DECKS[s.deck] || DECKS['64']).ai);
+    const x = DECKS[s.deck] || DECKS['64'];
     const hand = x.hand;
     return { hand, kitty: x.kitty, tricks: hand, minBid: x.minBid, stuckBid: x.stuckBid, cap: s.capBids ? hand - x.capCut : hand, hoss: 2 * hand, dhoss: 4 * hand, ranks: x.ranks, ai };
   }
@@ -1292,7 +1292,7 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
 
   const FIELDS = [
     ['level', 'Computer players', [['normal', 'Normal'], ['easy', 'Easy: careless, often plays a random card'], ['hard', 'Hard: plays out likely deals before each card']]],
-    ['deck', 'Deck', [['32', '32 cards (jack to ace, doubled): 8 each, no kitty'], ['48', '48 cards (9 to ace, doubled): 12 each, no kitty'], ['64', '64 cards (7 to ace, doubled): 15 each, 4 in the kitty']]],
+    ['deck', 'Deck', [['64', '64 cards (7 to ace, doubled): 15 each, 4 in the kitty'], ['48', '48 cards (9 to ace, doubled): 12 each, no kitty'], ['32', '32 cards (jack to ace, doubled): 8 each, no kitty']]],
     ['kitty', 'Kitty', [['after', 'Bidder calls trump, then takes the kitty'], ['before', 'Bidder takes the kitty, then calls trump'], ['aside', 'Kitty is set aside, not used']], 'Only used with the 64-card deck.'],
     ['bowers', 'Jacks', [['true', 'Bowers: trump jack and same-color jack are top trumps'], ['false', 'No bowers: jacks rank between queen and 10']]],
     ['capBids', 'Highest number bid', [['true', 'Capped (stronger hands go hoss)'], ['false', 'Up to every trick']], '32 cards: up to 6, or 8. 48 cards: up to 8, or 12. 64 cards: up to 11, or 15.'],

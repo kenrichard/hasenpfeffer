@@ -14,9 +14,9 @@ https://claude.ai/artifact/SBwdpEKMBHpjePLvpWzVon (version of 2026-11-21).
 
 ## Deck
 
-Ken's family plays with **J, Q, K, A only**: two decks, 32 cards, 8 each, no kitty, bids 4 to 6.
-That is the default (`deck: '32'`). The 48-card (9–A) and 64-card (7–A, with kitty) versions are
-still in Settings.
+Ken's family plays 15 cards each, 15 tricks, game to 64: two decks of 7 through ace (64 cards),
+4 left over as the kitty. That is the default (`deck: '64'`, `target: 64`). Settings also offer
+48 cards (9–A, 12 each) and 32 cards (J–A, 8 each, bids 4 to 6).
 
 The computer players' bidding thresholds are set per deck in `derive()` (`ai: { hoss, dhoss,
 safety }`). The 32-card numbers came from simulating games: the big-deck numbers made computers
