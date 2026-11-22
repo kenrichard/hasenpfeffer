@@ -240,7 +240,7 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
 
   function defaults() {
     return {
-      deck: '64',          // '64': 7-A doubled, 15 each, 4 kitty. '48': 9-A doubled, 12 each, no kitty
+      deck: '32',          // '32': J-A doubled, 8 each, no kitty. '48': 9-A doubled, 12 each, no kitty. '64': 7-A doubled, 15 each, 4 kitty
       kitty: 'after',      // 'after': call trump then take kitty, 'before': see kitty then call, 'aside': not used
       bowers: true,
       defendersScore: true,
@@ -248,15 +248,23 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
       firstLead: 'bidder', // 'bidder' or 'left' of dealer
       target: 64,
       swap: 2,
-      capBids: true,       // numbered bids stop at 11 (15 tricks); stronger hands go hoss
+      capBids: true,       // numbered bids stop short of every trick (6 of 8, 8 of 12, 11 of 15); stronger hands go hoss
       doubleHoss: true,    // allow a double hoss: alone with no swap, worth double
       hossFail: 'full'     // 'full': a failed hoss loses its value, 'half': loses half
     };
   }
   function derive(s) {
-    const big = s.deck === '64';
-    const hand = big ? 15 : 12;
-    return { hand, kitty: big ? 4 : 0, tricks: hand, minBid: big ? 9 : 6, stuckBid: big ? 8 : 6, cap: s.capBids ? hand - 4 : hand, hoss: 2 * hand, dhoss: 4 * hand, ranks: big ? ['7', '8', '9', '10', 'J', 'Q', 'K', 'A'] : ['9', '10', 'J', 'Q', 'K', 'A'] };
+    const DECKS = {
+      '64': { hand: 15, kitty: 4, minBid: 9, stuckBid: 8, capCut: 4, ranks: ['7', '8', '9', '10', 'J', 'Q', 'K', 'A'] },
+      '48': { hand: 12, kitty: 0, minBid: 6, stuckBid: 6, capCut: 4, ranks: ['9', '10', 'J', 'Q', 'K', 'A'] },
+      '32': { hand: 8, kitty: 0, minBid: 4, stuckBid: 4, capCut: 2, ranks: ['J', 'Q', 'K', 'A'], ai: { hoss: 0.8, dhoss: 0.95, safety: 1 } }
+    };
+    // computer bidding thresholds: hoss/dhoss are the share of all tricks the hand must be worth alone;
+    // safety is taken off a numbered bid. The small deck needs its own numbers (tuned by simulation).
+    const ai = Object.assign({ hoss: 0.62, dhoss: 0.7, safety: 0 }, (DECKS[s.deck] || DECKS['32']).ai);
+    const x = DECKS[s.deck] || DECKS['32'];
+    const hand = x.hand;
+    return { hand, kitty: x.kitty, tricks: hand, minBid: x.minBid, stuckBid: x.stuckBid, cap: s.capBids ? hand - x.capCut : hand, hoss: 2 * hand, dhoss: 4 * hand, ranks: x.ranks, ai };
   }
 
   // seeded RNG stored as a number so the game can be saved
@@ -569,15 +577,15 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
     const kittyBonus = d.kitty && s.kitty !== 'aside' ? 0.45 : 0;
     const partnerBonus = d.tricks * PARTNER;
     const teamEst = est + kittyBonus + partnerBonus;
-    const val = Math.floor(teamEst - SAFETY);
+    const val = Math.floor(teamEst - SAFETY - d.ai.safety);
     const opts = bidOptions(g);
     const n = trumpCount(hand, suit, s);
     const bp = bowerPhrase(hand, suit, s);
     const desc = `${n} ${NAME[suit].toLowerCase()}${bp ? ' (with ' + bp + ')' : ''} and about ${Math.round(est)} tricks on your own`;
     const solo = est + kittyBonus;
-    if (s.doubleHoss && opts.indexOf('D') >= 0 && solo >= d.tricks * 0.7 && n >= Math.ceil(d.hand * 0.6))
+    if (s.doubleHoss && opts.indexOf('D') >= 0 && solo >= d.tricks * d.ai.dhoss && n >= Math.ceil(d.hand * 0.6))
       return { bid: 'D', suit, reason: `${desc}. You can take every trick without your partner's help, so go double hoss.` };
-    if (opts.indexOf('H') >= 0 && solo + s.swap * 0.25 >= d.tricks * 0.62 && n >= Math.ceil(d.hand * 0.5))
+    if (opts.indexOf('H') >= 0 && solo + s.swap * 0.25 >= d.tricks * d.ai.hoss && n >= Math.ceil(d.hand * 0.5))
       return { bid: 'H', suit, reason: `${desc}. With two cards from your partner you can take every trick, so go hoss.` };
     const partnerHigh = g.high && team(g.high.seat) === team(seat);
     if (partnerHigh && val <= bidNum(g, g.high.value) + 1)
@@ -1229,10 +1237,10 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
 
   function rulesHtml(s) {
     const d = HP.derive(s);
-    const low = s.deck === '64' ? ', 8, 7' : '';
-    const deck = s.deck === '64' ? 'Two decks of 7 through ace, 64 cards' : 'Two decks of 9 through ace, 48 cards';
+    const down = d.ranks.slice().reverse();
+    const deck = `Two decks of ${d.ranks[0] === 'J' ? 'jack' : d.ranks[0]} through ace, ${d.ranks.length * 8} cards`;
     const kit = !d.kitty ? 'No kitty: every card is dealt.' : s.kitty === 'after' ? `The high bidder calls trump first, then picks up the ${d.kitty}-card kitty and puts any ${d.kitty} cards back down.` : s.kitty === 'before' ? `The high bidder picks up the ${d.kitty}-card kitty, then calls trump and puts any ${d.kitty} cards back down.` : `The ${d.kitty} leftover cards are set aside and nobody uses them.`;
-    const trumpOrder = s.bowers ? 'right bower, left bower, A, K, Q, 10, 9' + low : 'A, K, Q, J, 10, 9' + low;
+    const trumpOrder = s.bowers ? ['right bower', 'left bower'].concat(down.filter((r) => r !== 'J')).join(', ') : down.join(', ');
     const hf = (x) => (s.hossFail === 'half' ? x / 2 : x);
     return `
       <h2>How Hasenpfeffer works</h2>
@@ -1252,7 +1260,7 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
       <h3>Card order</h3>
       <ul>
         <li>Trump, high to low: ${trumpOrder}.</li>
-        <li>Other suits: A, K, Q, J, 10, 9${low}.</li>
+        <li>Other suits: ${down.join(', ')}.</li>
         <li>There are two of every card. When both copies land on the same trick, the one played first wins.</li>
       </ul>
       ${s.bowers ? `<h3>The bowers (the Right and Left tags)</h3>
@@ -1284,17 +1292,17 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
 
   const FIELDS = [
     ['level', 'Computer players', [['normal', 'Normal'], ['easy', 'Easy: careless, often plays a random card'], ['hard', 'Hard: plays out likely deals before each card']]],
-    ['deck', 'Deck', [['64', '64 cards (7 to ace, doubled): 15 each, 4 in the kitty'], ['48', '48 cards (9 to ace, doubled): 12 each, no kitty']]],
+    ['deck', 'Deck', [['32', '32 cards (jack to ace, doubled): 8 each, no kitty'], ['48', '48 cards (9 to ace, doubled): 12 each, no kitty'], ['64', '64 cards (7 to ace, doubled): 15 each, 4 in the kitty']]],
     ['kitty', 'Kitty', [['after', 'Bidder calls trump, then takes the kitty'], ['before', 'Bidder takes the kitty, then calls trump'], ['aside', 'Kitty is set aside, not used']], 'Only used with the 64-card deck.'],
     ['bowers', 'Jacks', [['true', 'Bowers: trump jack and same-color jack are top trumps'], ['false', 'No bowers: jacks rank between queen and 10']]],
-    ['capBids', 'Highest number bid', [['true', 'Up to 11 (stronger hands go hoss)'], ['false', 'Up to 15']], 'With 48 cards: up to 8, or up to 12.'],
+    ['capBids', 'Highest number bid', [['true', 'Capped (stronger hands go hoss)'], ['false', 'Up to every trick']], '32 cards: up to 6, or 8. 48 cards: up to 8, or 12. 64 cards: up to 11, or 15.'],
     ['doubleHoss', 'Double hoss', [['true', 'Allowed: alone, no cards from partner, double points'], ['false', 'Not allowed']]],
     ['swap', 'Cards partner passes on a hoss', [['2', '2'], ['1', '1'], ['3', '3'], ['0', 'None']]],
     ['hossFail', 'A failed hoss', [['full', 'Loses its full value'], ['half', 'Loses half its value']]],
-    ['allPass', 'If everyone passes', [['stuck', 'Dealer is stuck at 8 (6 with 48 cards)'], ['redeal', 'Throw the hand in and deal again']]],
+    ['allPass', 'If everyone passes', [['stuck', 'Dealer is stuck at the minimum bid'], ['redeal', 'Throw the hand in and deal again']]],
     ['defendersScore', 'Other team', [['true', 'Scores a point per trick it takes'], ['false', 'Scores nothing']]],
     ['firstLead', 'First lead', [['bidder', 'High bidder leads'], ['left', 'Player left of the dealer leads']]],
-    ['target', 'Game to', [['64', '64'], ['62', '62'], ['50', '50'], ['100', '100']]]
+    ['target', 'Game to', [['64', '64'], ['62', '62'], ['50', '50'], ['32', '32'], ['100', '100']]]
   ];
   $('bSet').onclick = () => {
     const s = Object.assign({}, UI.v.s, { level: UI.v.level || 'normal' });

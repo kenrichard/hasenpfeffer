@@ -12,6 +12,17 @@ https://claude.ai/artifact/SBwdpEKMBHpjePLvpWzVon (version of 2026-11-21).
   and computer players); it exports through `module.exports` when loaded in Node, so a server or
   tests can reuse it. The second script is the browser client.
 
+## Deck
+
+Ken's family plays with **J, Q, K, A only**: two decks, 32 cards, 8 each, no kitty, bids 4 to 6.
+That is the default (`deck: '32'`). The 48-card (9–A) and 64-card (7–A, with kitty) versions are
+still in Settings.
+
+The computer players' bidding thresholds are set per deck in `derive()` (`ai: { hoss, dhoss,
+safety }`). The 32-card numbers came from simulating games: the big-deck numbers made computers
+hoss on about 60% of hands and fail most of them, so scores sank and games never ended. If you
+change bidding or the deck, rerun a simulation that plays full games and check that they finish.
+
 ## State
 
 - `window.HP_STANDALONE = true` puts the page in solo-only mode. Open `index.html` in a browser
