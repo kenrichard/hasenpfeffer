@@ -156,7 +156,7 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
 <div class="wrap" id="lobby" hidden>
   <header><h1>Hasenpfeffer</h1></header>
   <div class="lobby">
-    <p class="intro">The Pennsylvania Dutch double-deck euchre game. Practice alone with a computer partner, or sit across from someone on their own phone against two computer players.</p>
+    <p class="intro">The Pennsylvania Dutch euchre game. Practice alone with a computer partner, or sit across from someone on their own phone against two computer players.</p>
     <div class="choice">
       <h2>Play solo</h2>
       <p>You and a computer partner against Amos and Esther.</p>
@@ -240,7 +240,7 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
 
   function defaults() {
     return {
-      deck: '64',          // '64': 7-A doubled, 15 each, 4 kitty. '48': 9-A doubled, 12 each, no kitty. '32': J-A doubled, 8 each, no kitty
+      deck: 'J4',          // 'J4': J-A from four decks, 15 each, 4 kitty. '64': 7-A doubled, 15 each, 4 kitty. '48': 9-A doubled, 12 each, no kitty. '32': J-A doubled, 8 each, no kitty
       kitty: 'after',      // 'after': call trump then take kitty, 'before': see kitty then call, 'aside': not used
       bowers: true,
       defendersScore: true,
@@ -255,16 +255,17 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
   }
   function derive(s) {
     const DECKS = {
+      'J4': { copies: 4, hand: 15, kitty: 4, minBid: 9, stuckBid: 8, capCut: 4, ranks: ['J', 'Q', 'K', 'A'], ai: { hoss: 0.7, dhoss: 0.8, safety: 1 } },
       '64': { hand: 15, kitty: 4, minBid: 9, stuckBid: 8, capCut: 4, ranks: ['7', '8', '9', '10', 'J', 'Q', 'K', 'A'] },
       '48': { hand: 12, kitty: 0, minBid: 6, stuckBid: 6, capCut: 4, ranks: ['9', '10', 'J', 'Q', 'K', 'A'] },
       '32': { hand: 8, kitty: 0, minBid: 4, stuckBid: 4, capCut: 2, ranks: ['J', 'Q', 'K', 'A'], ai: { hoss: 0.8, dhoss: 0.95, safety: 1 } }
     };
     // computer bidding thresholds: hoss/dhoss are the share of all tricks the hand must be worth alone;
     // safety is taken off a numbered bid. The small deck needs its own numbers (tuned by simulation).
-    const ai = Object.assign({ hoss: 0.62, dhoss: 0.7, safety: 0 }, (DECKS[s.deck] || DECKS['64']).ai);
-    const x = DECKS[s.deck] || DECKS['64'];
+    const ai = Object.assign({ hoss: 0.62, dhoss: 0.7, safety: 0 }, (DECKS[s.deck] || DECKS['J4']).ai);
+    const x = DECKS[s.deck] || DECKS['J4'];
     const hand = x.hand;
-    return { hand, kitty: x.kitty, tricks: hand, minBid: x.minBid, stuckBid: x.stuckBid, cap: s.capBids ? hand - x.capCut : hand, hoss: 2 * hand, dhoss: 4 * hand, ranks: x.ranks, ai };
+    return { hand, kitty: x.kitty, tricks: hand, minBid: x.minBid, stuckBid: x.stuckBid, cap: s.capBids ? hand - x.capCut : hand, hoss: 2 * hand, dhoss: 4 * hand, ranks: x.ranks, copies: x.copies || 2, ai };
   }
 
   // seeded RNG stored as a number so the game can be saved
@@ -318,7 +319,7 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
   function makeDeck(d) {
     const deck = [];
     let n = 0;
-    for (let copy = 0; copy < 2; copy++) for (const su of SUITS) for (const r of d.ranks) deck.push({ id: n++, s: su, r });
+    for (let copy = 0; copy < (d.copies || 2); copy++) for (const su of SUITS) for (const r of d.ranks) deck.push({ id: n++, s: su, r });
     return deck;
   }
 
@@ -1238,7 +1239,9 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
   function rulesHtml(s) {
     const d = HP.derive(s);
     const down = d.ranks.slice().reverse();
-    const deck = `Two decks of ${d.ranks[0] === 'J' ? 'jack' : d.ranks[0]} through ace, ${d.ranks.length * 8} cards`;
+    const nDecks = ['', 'One', 'Two', 'Three', 'Four'][d.copies] || String(d.copies);
+    const copiesWord = ['', 'one', 'two', 'three', 'four'][d.copies] || String(d.copies);
+    const deck = `${nDecks} decks of ${d.ranks[0] === 'J' ? 'jack' : d.ranks[0]} through ace, ${d.ranks.length * 4 * d.copies} cards`;
     const kit = !d.kitty ? 'No kitty: every card is dealt.' : s.kitty === 'after' ? `The high bidder calls trump first, then picks up the ${d.kitty}-card kitty and puts any ${d.kitty} cards back down.` : s.kitty === 'before' ? `The high bidder picks up the ${d.kitty}-card kitty, then calls trump and puts any ${d.kitty} cards back down.` : `The ${d.kitty} leftover cards are set aside and nobody uses them.`;
     const trumpOrder = s.bowers ? ['right bower', 'left bower'].concat(down.filter((r) => r !== 'J')).join(', ') : down.join(', ');
     const hf = (x) => (s.hossFail === 'half' ? x / 2 : x);
@@ -1261,14 +1264,14 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
       <ul>
         <li>Trump, high to low: ${trumpOrder}.</li>
         <li>Other suits: ${down.join(', ')}.</li>
-        <li>There are two of every card. When both copies land on the same trick, the one played first wins.</li>
+        <li>There are ${copiesWord} of every card. When copies of the same card land on the same trick, the one played first wins.</li>
       </ul>
       ${s.bowers ? `<h3>The bowers (the Right and Left tags)</h3>
       <ul>
         <li><b>Right bower:</b> the jack of the trump suit. It's the highest card in the game.</li>
         <li><b>Left bower:</b> the other jack of the same color. If hearts are trump, it's the jack of diamonds. It ranks second, right under the right bower.</li>
         <li>The left bower stops belonging to its printed suit and counts as a trump. Play it when trump is led, and don't use it to follow its printed suit.</li>
-        <li>With two decks there are two right bowers and two left bowers. If both copies land on the same trick, the one played first wins.</li>
+        <li>With ${nDecks.toLowerCase()} decks there are ${copiesWord} right bowers and ${copiesWord} left bowers. If copies of the same bower land on the same trick, the one played first wins.</li>
         <li>Once trump is called, the game marks these jacks with a gold Right or Left tag.</li>
       </ul>` : ''}
       <h3>Play</h3>
@@ -1292,8 +1295,8 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
 
   const FIELDS = [
     ['level', 'Computer players', [['normal', 'Normal'], ['easy', 'Easy: careless, often plays a random card'], ['hard', 'Hard: plays out likely deals before each card']]],
-    ['deck', 'Deck', [['64', '64 cards (7 to ace, doubled): 15 each, 4 in the kitty'], ['48', '48 cards (9 to ace, doubled): 12 each, no kitty'], ['32', '32 cards (jack to ace, doubled): 8 each, no kitty']]],
-    ['kitty', 'Kitty', [['after', 'Bidder calls trump, then takes the kitty'], ['before', 'Bidder takes the kitty, then calls trump'], ['aside', 'Kitty is set aside, not used']], 'Only used with the 64-card deck.'],
+    ['deck', 'Deck', [['J4', '64 cards (jack to ace, four decks): 15 each, 4 in the kitty'], ['64', '64 cards (7 to ace, two decks): 15 each, 4 in the kitty'], ['48', '48 cards (9 to ace, two decks): 12 each, no kitty'], ['32', '32 cards (jack to ace, two decks): 8 each, no kitty']]],
+    ['kitty', 'Kitty', [['after', 'Bidder calls trump, then takes the kitty'], ['before', 'Bidder takes the kitty, then calls trump'], ['aside', 'Kitty is set aside, not used']], 'Only used with the 64-card decks.'],
     ['bowers', 'Jacks', [['true', 'Bowers: trump jack and same-color jack are top trumps'], ['false', 'No bowers: jacks rank between queen and 10']]],
     ['capBids', 'Highest number bid', [['true', 'Capped (stronger hands go hoss)'], ['false', 'Up to every trick']], '32 cards: up to 6, or 8. 48 cards: up to 8, or 12. 64 cards: up to 11, or 15.'],
     ['doubleHoss', 'Double hoss', [['true', 'Allowed: alone, no cards from partner, double points'], ['false', 'Not allowed']]],

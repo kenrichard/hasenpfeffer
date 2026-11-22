@@ -14,12 +14,13 @@ https://claude.ai/artifact/SBwdpEKMBHpjePLvpWzVon (version of 2026-11-21).
 
 ## Deck
 
-Ken's family plays 15 cards each, 15 tricks, game to 64: two decks of 7 through ace (64 cards),
-4 left over as the kitty. That is the default (`deck: '64'`, `target: 64`). Settings also offer
-48 cards (9–A, 12 each) and 32 cards (J–A, 8 each, bids 4 to 6).
+Ken's family plays with **only J, Q, K, A, from four decks**: 64 cards, four of every card,
+15 each, 15 tricks, 4 left over as the kitty, game to 64. That is the default (`deck: 'J4'`,
+`target: 64`). No low cards: don't switch the default back to 7–A. Settings also offer 64 cards
+from two decks of 7–A, 48 cards (9–A, 12 each) and 32 cards (J–A from two decks, 8 each).
 
-The computer players' bidding thresholds are set per deck in `derive()` (`ai: { hoss, dhoss,
-safety }`). The 32-card numbers came from simulating games: the big-deck numbers made computers
+The number of decks is `copies` in the `DECKS` table in `derive()`. The computer players' bidding
+thresholds are set per deck there too (`ai: { hoss, dhoss, safety }`). The J4 and 32-card numbers came from simulating games: on the 32-card deck the original numbers made computers
 hoss on about 60% of hands and fail most of them, so scores sank and games never ended. If you
 change bidding or the deck, rerun a simulation that plays full games and check that they finish.
 
