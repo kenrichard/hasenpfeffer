@@ -24,6 +24,16 @@ thresholds are set per deck there too (`ai: { hoss, dhoss, safety }`). The J4 an
 hoss on about 60% of hands and fail most of them, so scores sank and games never ended. If you
 change bidding or the deck, rerun a simulation that plays full games and check that they finish.
 
+## Hand review
+
+At the end of each hand, "Review my hand" lists the choices where you differed from the tutor
+(which plays like the Normal computer). The solo controller records each of your decisions with
+the tutor's pick (`g.log`; card plays keep a snapshot of the game). For card plays,
+`HP.compareCards` plays both cards against 60 sampled deals of the unseen cards and the review
+lists the play only if the tutor's card did clearly better: at least 0.25 tricks, or 8 points
+better odds of making the bid (or setting the other team). Bids, trump and discards show the
+tutor's reasoning with no score. Solo only: online games run on the server.
+
 ## State
 
 - `window.HP_STANDALONE = true` puts the page in solo-only mode. Open `index.html` in a browser

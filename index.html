@@ -137,6 +137,15 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
 .res .v { text-align: right; font-weight: 700; }
 .pos { color: var(--green); } .neg { color: var(--red); }
 .verdict { font-size: 17px; font-weight: 700; }
+.rv { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }
+.rv.big { border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold); }
+.rvh { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 700; }
+.rvt { font-size: 13px; color: var(--muted); }
+.rvc { font-size: 14px; color: var(--red); font-weight: 700; }
+.rvw { font-size: 14px; }
+.sheet .note { font-size: 12px; color: var(--muted); }
+.cn { font-weight: 700; white-space: nowrap; background: var(--card); color: var(--card-ink); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+.cn.red { color: var(--card-red); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 .hand .card, .abtn { transition: transform .12s ease, box-shadow .12s ease; }
 
@@ -793,6 +802,24 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
     return { card: best, reason: `Play ${lbl(g, best)}. Playing out ${rounds} likely deals, it does best for your team here (about ${(avg - (tot[baseIdx] / cnt[baseIdx] || avg)).toFixed(1)} better than the obvious play).` };
   }
 
+  // For the hand review: play each candidate card against the same sampled deals of the unseen
+  // cards and report the average tricks for seat's team and how often the bid is made.
+  function compareCards(g, seat, ids, rounds) {
+    const res = ids.map(() => ({ tricks: 0, made: 0 }));
+    const bt = team(g.bidder), my = team(seat), n = rounds || 60;
+    for (let r = 0; r < n; r++) {
+      const h0 = determinize(g, seat);
+      ids.forEach((id, i) => {
+        const h = clone(h0);
+        playCard(h, seat, id);
+        rollout(h);
+        res[i].tricks += h.tricks[my];
+        res[i].made += (h.hawsey ? h.tricks[bt] === h.d.tricks : h.tricks[bt] >= h.contract) ? 1 : 0;
+      });
+    }
+    return res.map((x) => ({ tricks: x.tricks / n, made: x.made / n }));
+  }
+
   function aiPlayLevel(g, seat, level, budgetMs) {
     if (level === 'easy') {
       const L = legal(g, seat);
@@ -877,7 +904,7 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
     return v;
   }
 
-  const api = { SUITS, SYM, NAME, MATE, SEATS, RV, defaults, derive, newGame, startHand, bidOptions, placeBid, redeal, declareTrump, giveCards, discard, legal, playCard, collectTrick, nextHand, currentWinner, ledSuit, effSuit, isTrump, power, sortHand, needDiscard, team, label, aiBid, aiTrump, aiDiscard, aiGive, aiPlay, estTricks, activeCount, tune, bidNum, aiPlayLevel, aiBidLevel, clone, pendingAuto, humanAction, hintFor, viewFor };
+  const api = { compareCards, SUITS, SYM, NAME, MATE, SEATS, RV, defaults, derive, newGame, startHand, bidOptions, placeBid, redeal, declareTrump, giveCards, discard, legal, playCard, collectTrick, nextHand, currentWinner, ledSuit, effSuit, isTrump, power, sortHand, needDiscard, team, label, aiBid, aiTrump, aiDiscard, aiGive, aiPlay, estTricks, activeCount, tune, bidNum, aiPlayLevel, aiBidLevel, clone, pendingAuto, humanAction, hintFor, viewFor };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.HP = api;
 })(this);
 
@@ -925,8 +952,22 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
       else { g = HP.newGame(settings || fetchKey('hp.settings') || {}); HP.startHand(g); }
       publish();
     };
+    // decisions made this hand, for the review at the end
+    function record(a) {
+      if (['bid', 'trump', 'give', 'discard', 'play'].indexOf(a.type) < 0) return;
+      if (g.logHand !== g.handNo) { g.log = []; g.logHand = g.handNo; }
+      const hint = HP.hintFor(g, ME, 'normal');
+      if (!hint) return;
+      const e = { a, hint, trickNo: g.trickNo };
+      if (a.type === 'play') {
+        const snap = JSON.parse(JSON.stringify(g)); delete snap.log; delete snap.logHand;
+        e.snap = snap;
+      } else { e.hand = g.hands[ME].slice(); e.trump = { s: g.s, trump: g.trump }; } // trump is for bower labels
+      g.log.push(e);
+    }
     self.act = function (a) {
-      try { HP.humanAction(g, ME, a); } catch (e) { return; }
+      const before = g.log && g.logHand === g.handNo ? g.log.length : 0;
+      try { record(a); HP.humanAction(g, ME, a); } catch (e) { if (g.log && g.log.length > before) g.log.length = before; return; }
       if (a.type === 'collect') clearTimeout(timer);
       publish();
     };
@@ -937,7 +978,61 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
     };
     self.setTutor = function (on) { self.tutor = on; store('hp.hints', on); publish(); };
     self.leave = function () { clearTimeout(timer); };
+    // the hand just finished: what the tutor would have done differently, and what it cost
+    self.review = function () {
+      const log = g.logHand === g.handNo ? g.log || [] : [];
+      return reviewHand(log, g.result, names);
+    };
     return self;
+  }
+
+  function reviewHand(log, result, names) {
+    const same = (x, y) => x.s === y.s && x.r === y.r;
+    const sameSet = (A, B) => { const a = A.map((c) => c.s + c.r).sort().join(), b = B.map((c) => c.s + c.r).sort().join(); return a === b; };
+    const items = [];
+    let checked = 0;
+    for (const e of log) {
+      checked++;
+      const h = e.hint, a = e.a;
+      if (a.type === 'bid') {
+        if (a.v === h.bid) continue;
+        const bidTxt = (v) => (v === 'pass' ? 'pass' : v === 'H' ? 'go hoss' : v === 'D' ? 'go double hoss' : 'bid ' + v);
+        items.push({ when: 'Bidding', did: `You chose to ${bidTxt(a.v)}.`, better: `The tutor would ${bidTxt(h.bid)}.`, why: h.reason, cost: null });
+      } else if (a.type === 'trump') {
+        if (a.suit === h.suit) continue;
+        items.push({ when: 'Calling trump', did: `You called ${HP.NAME[a.suit]}.`, better: `The tutor would call ${HP.NAME[h.suit]}.`, why: h.reason, cost: null });
+      } else if (a.type === 'give' || a.type === 'discard') {
+        const find = (id) => e.hand.find((c) => c.id === id);
+        const ct = (c) => cardTxt(c, e.trump);
+        const mine = a.ids.map(find).filter(Boolean), tut = h.ids.map(find).filter(Boolean);
+        if (sameSet(mine, tut)) continue;
+        const verb = a.type === 'give' ? 'passed your partner' : 'put down';
+        items.push({ when: a.type === 'give' ? 'Passing cards for the hoss' : 'Putting cards down', did: `You ${verb} ${mine.map(ct).join(' ')}.`, better: `The tutor would choose ${tut.map(ct).join(' ')}.`, why: h.reason, cost: null });
+      } else if (a.type === 'play') {
+        const s = e.snap, hand = s.hands[ME];
+        const mine = hand.find((c) => c.id === a.id), tut = hand.find((c) => c.id === h.ids[0]);
+        if (!mine || !tut || same(mine, tut)) continue;
+        const [m, t] = HP.compareCards(s, ME, [mine.id, tut.id], 60);
+        // "good" is making the bid when it's ours, and setting them when it's theirs
+        const ours = HP.team(s.bidder) === HP.team(ME);
+        const good = (x) => (ours ? x.made : 1 - x.made);
+        const lost = t.tricks - m.tricks, goodDrop = good(t) - good(m);
+        if (lost < 0.25 && goodDrop < 0.08) continue; // close enough: not a mistake
+        const ct = (c) => cardTxt(c, s);
+        const table = s.trick.length ? s.trick.map((x, i) => `${x.seat === ME ? 'You' : esc(names[x.seat])} ${i ? 'played' : 'led'} ${ct(x.card)}`).join(', ') + '.' : 'You were leading.';
+        const parts = [];
+        if (lost >= 0.15) parts.push(`about ${lost.toFixed(1)} more trick${Math.abs(lost - 1) < 0.05 ? '' : 's'} for your team on average`);
+        if (goodDrop >= 0.05) parts.push(ours ? `your team makes the bid ${Math.round(good(t) * 100)}% of the time instead of ${Math.round(good(m) * 100)}%` : `you set them ${Math.round(good(t) * 100)}% of the time instead of ${Math.round(good(m) * 100)}%`);
+        const cost = parts.join(', and ');
+        items.push({ when: `Trick ${e.trickNo + 1}`, table, did: `You played ${ct(mine)}.`, better: `Better: ${ct(tut)}.`, why: h.reason, cost: 'The better play gives ' + cost + '.', size: lost + goodDrop * 4 });
+      }
+    }
+    return { items, checked };
+  }
+  function cardTxt(c, g) {
+    let tag = '';
+    if (g && g.s && g.s.bowers && g.trump && c.r === 'J') tag = c.s === g.trump ? ' (right bower)' : c.s === HP.MATE[g.trump] ? ' (left bower)' : '';
+    return `<span class="cn${c.s === 'H' || c.s === 'D' ? ' red' : ''}">${c.r}${HP.SYM[c.s]}</span>${tag}`;
   }
 
   /* ---------- online controller: the server keeps the game ---------- */
@@ -1083,7 +1178,7 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
     if (v.phase === 'handOver' || v.phase === 'gameOver') {
       const key = v.handNo + ':' + v.phase;
       if (UI.shownResult !== key) { UI.shownResult = key; showResult(v); }
-    } else if (UI.shownResult && !$('ov').hidden && $('sheet').dataset.kind === 'result') { UI.shownResult = null; closeSheet(); }
+    } else if (UI.shownResult && !$('ov').hidden && blocking()) { UI.shownResult = null; closeSheet(); }
   }
 
   function renderStatus(v) {
@@ -1200,7 +1295,7 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
   /* ---------- sheets ---------- */
   function openSheet(html, kind) { const sh = $('sheet'); sh.innerHTML = html; sh.dataset.kind = kind || ''; $('ov').hidden = false; const f = sh.querySelector('button'); if (f) f.focus(); }
   function closeSheet() { $('ov').hidden = true; }
-  const blocking = () => $('sheet').dataset.kind === 'result';
+  const blocking = () => ['result', 'review'].indexOf($('sheet').dataset.kind) >= 0;
   $('ov').addEventListener('click', (e) => { if (e.target === $('ov') && !blocking()) closeSheet(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('ov').hidden && !blocking()) closeSheet(); });
 
@@ -1227,11 +1322,36 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
       </div>
       <p class="verdict">Score: ${v.scores[0]} to ${v.scores[1]}${over ? '' : ` · game is ${v.s.target}`}</p>
       ${over && v.scores[0] >= v.s.target && v.scores[1] >= v.s.target ? '<p>Both teams reached the target on the same hand, so the bidding team wins.</p>' : ''}
-      <div class="row"><button class="abtn primary" id="bNext">${over ? 'New game' : 'Deal next hand'}</button></div>`, 'result');
+      <div class="row">${UI.ctrl.review ? '<button class="abtn" id="bReview">Review my hand</button>' : ''}<button class="abtn primary" id="bNext">${over ? 'New game' : 'Deal next hand'}</button></div>`, 'result');
+    if ($('bReview')) $('bReview').onclick = () => showReview(v);
     $('bNext').onclick = () => {
       closeSheet();
       if (over) UI.ctrl.newGame(v.s, v.level); else act({ type: 'next' });
     };
+  }
+
+  function showReview(v) {
+    openSheet('<h2>Hand review</h2><p>Playing out likely deals to check your choices…</p>', 'review');
+    setTimeout(() => {
+      const r = UI.ctrl.review();
+      const n = r.items.length;
+      const top = r.items.filter((x) => x.size != null).sort((a, b) => b.size - a.size)[0];
+      const list = r.items.map((x) => `
+        <div class="rv${x === top && n > 1 ? ' big' : ''}">
+          <div class="rvh">${x.when}${x === top && n > 1 ? ' · costliest' : ''}</div>
+          ${x.table ? `<p class="rvt">${x.table}</p>` : ''}
+          <p>${x.did} <b>${x.better}</b></p>
+          ${x.cost ? `<p class="rvc">${x.cost}</p>` : ''}
+          <p class="rvw">${esc(x.why)}</p>
+        </div>`).join('');
+      const summary = !r.checked ? 'There were no choices of yours to check this hand.'
+        : !n ? `You made ${r.checked} choice${r.checked === 1 ? '' : 's'} this hand, and each one was as good as the tutor's. Nice hand.`
+        : `You made ${r.checked} choices this hand. The tutor would have done ${n} differently:`;
+      openSheet(`<h2>Hand review</h2><p>${summary}</p>${list}
+        <p class="note">The tutor plays like the Normal computer. For card plays it tries your card and its pick against 60 likely deals of the cards you couldn't see, and lists a play only when its pick did clearly better. Bids, trump and discards show the tutor's reasoning without a score.</p>
+        <div class="row"><button class="abtn primary" id="bBack">Back to the results</button></div>`, 'review');
+      $('bBack').onclick = () => showResult(v);
+    }, 30);
   }
 
   function rulesHtml(s) {
