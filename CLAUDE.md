@@ -34,6 +34,12 @@ lists the play only if the tutor's card did clearly better: at least 0.25 tricks
 better odds of making the bid (or setting the other team). Bids, trump and discards show the
 tutor's reasoning with no score. Solo only: online games run on the server.
 
+## Deploy
+
+Live at https://hasenpfeffer.vercel.app (Vercel team "Ken Richard's projects", project
+`hasenpfeffer`). The project is connected to the GitHub repo, so every push to `main` deploys to
+production. No build step: Vercel serves the files as they are.
+
 ## State
 
 - `window.HP_STANDALONE = true` puts the page in solo-only mode. Open `index.html` in a browser
