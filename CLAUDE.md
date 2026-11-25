@@ -24,6 +24,28 @@ thresholds are set per deck there too (`ai: { hoss, dhoss, safety }`). The J4 an
 hoss on about 60% of hands and fail most of them, so scores sank and games never ended. If you
 change bidding or the deck, rerun a simulation that plays full games and check that they finish.
 
+## Words
+
+The family calls the bowers **bars** (right bar, left bar). Use "bar" in everything the player
+sees; the code keeps the `bowers` setting name.
+
+## Tip and keeping count
+
+Ken wants the game to train him to keep track of the right bars, the left bars, trumps played and
+who has shown out of a suit. Two parts, both in the solo controller:
+
+- **Tip** (header button) is a one-off "help me with this decision", not a mode: it shows the
+  hint for the current choice and clears when you act. Tips used are counted.
+- **Keep-count questions** pause the game and ask how many right bars / left bars / trumps are
+  still out, or who has shown out of a suit. They come right after a trick with a bar, a
+  trump-in or a trump lead, or when it's your lead (if you won the trick, the question waits for
+  your lead). At most one per trick; how often is the `memory` setting. A miss shows the
+  count-down (start, minus your hand, minus each trick), because counting down is the habit
+  being taught. "Still out" means not yet seen by you (`HP.unseen`). The engine records who
+  played each card (`playSeat`, `playTrick`) and when each player showed out (`voidAt`).
+- The results screen shows "Keeping count: N of M right, K tips" and the last-10-hands rate
+  (`hp.memstats` in localStorage).
+
 ## Hand review
 
 At the end of each hand, "Review my hand" lists the choices where you differed from the tutor
