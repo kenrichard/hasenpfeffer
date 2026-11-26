@@ -101,6 +101,13 @@ header h1 { font-family: var(--f-display); font-weight: 700; font-size: 24px; ma
 .abtn.on { background: var(--gold); border-color: var(--gold); color: #1a1300; }
 .memline { margin: 0; }
 .tbtn:disabled { opacity: .45; cursor: default; }
+.tools { display: flex; gap: 8px; align-items: center; margin-bottom: -2px; }
+.tools .tbtn { min-height: 36px; padding: 6px 16px; font-size: 14px; }
+.toolnote { font-size: 12px; color: var(--muted); }
+.cnt { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }
+.cnt .big { font-family: var(--f-display); font-size: 28px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.cnt .row1 { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.cnt .ttl { font-weight: 700; }
 .hint { font-size: 14px; color: var(--gold-ink); display: flex; gap: 6px; }
 .hint::before { content: "Tip"; flex: none; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; background: var(--gold); color: #1a1300; border-radius: 4px; padding: 1px 5px; height: fit-content; margin-top: 2px; }
 .actions { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -213,7 +220,6 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
 <div class="wrap" id="app" hidden>
   <header>
     <h1>Hasenpfeffer</h1>
-    <button class="tbtn" id="bTip">Tip</button>
     <button class="tbtn" id="bRules">Rules</button>
     <button class="tbtn" id="bSet">Settings</button>
   </header>
@@ -231,6 +237,7 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
     <div class="trick" id="trick"></div>
   </div>
   <div class="conn" id="conn" hidden></div>
+  <div class="tools"><button class="tbtn" id="bTip">Tip</button><button class="tbtn" id="bCount">Count</button><span class="toolnote" id="toolNote"></span></div>
   <div class="status" id="status"><div class="msg" id="msg"></div><div class="hint" id="hint" hidden></div></div>
   <div class="actions" id="actions"></div>
   <div class="handhead"><span id="handLbl">Your hand</span><span id="handCount"></span></div>
@@ -264,7 +271,8 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
       capBids: true,       // numbered bids stop short of every trick (6 of 8, 8 of 12, 11 of 15); stronger hands go hoss
       doubleHoss: true,    // allow a double hoss: alone with no swap, worth double
       hossFail: 'full',    // 'full': a failed hoss loses its value, 'half': loses half
-      memory: 'sometimes'  // keep-count questions about bars, trumps and who is out of a suit: 'often', 'sometimes', 'off'
+      memory: 'sometimes', // how often keep-count questions come: 'often', 'sometimes', 'off'
+      focus: 'bars'        // what they cover: 'right' bars, 'bars' (right and left), 'trumps' (bars and trumps), 'all' (also who's out of a suit)
     };
   }
   function derive(s) {
@@ -941,7 +949,7 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
   /* ---------- solo controller: the whole game runs in this browser ---------- */
   function SoloController() {
     const self = { mode: 'solo', level: fetchKey('hp.level') || 'normal' };
-    let tipOn = false, quiz = null;
+    let tipOn = false, quiz = null, counting = false;
     let g = null, timer = null;
     const names = COMPUTER_NAMES.slice();
     const isHuman = (p) => p === ME;
@@ -952,6 +960,7 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
       const hint = HP.hintFor(g, ME, self.level);
       if (!hint) tipOn = false;
       v.canTip = !!hint && !quiz;
+      v.canCount = !quiz && !!g.trump && ['play', 'trickDone'].indexOf(g.phase) >= 0;
       v.hint = tipOn && !quiz ? hint : null;
       v.quiz = quiz;
       v.level = self.level;
@@ -964,13 +973,13 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
     }
     // this hand's keep-count score
     function memFor() {
-      if (!g.mem || g.mem.hand !== g.handNo) g.mem = { hand: g.handNo, asked: 0, right: 0, tips: 0, askedAt: {} };
+      if (!g.mem || g.mem.hand !== g.handNo) g.mem = { hand: g.handNo, asked: 0, right: 0, tips: 0, peeks: 0, askedAt: {} };
       return g.mem;
     }
     function saveMemStats(m) {
-      if (!m.asked && !m.tips) return;
+      if (!m.asked && !m.tips && !m.peeks) return;
       const h = fetchKey('hp.memstats') || [];
-      h.push({ asked: m.asked, right: m.right, tips: m.tips });
+      h.push({ asked: m.asked, right: m.right, tips: m.tips, peeks: m.peeks || 0 });
       store('hp.memstats', h.slice(-50));
     }
     // keep-count questions: right after a trick with a bar or a trump-in, or when it's your lead
@@ -1002,7 +1011,7 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
       const trail = [`Start: ${total} ${word}.`];
       let left = total;
       const myPlayed = g.played.filter((c, i) => test(c) && g.playSeat[i] === ME).length;
-      if (mine.length + myPlayed) { left -= mine.length + myPlayed; trail.push(`You had ${mine.length + myPlayed} → ${left} out.`); }
+      if (mine.length + myPlayed) { left -= mine.length + myPlayed; trail.push(`Yours: ${mine.length + myPlayed} → ${left} still out.`); }
       if (g.bidder === ME && g.discards) { const dn = g.discards.filter(test).length; if (dn) { left -= dn; trail.push(`You put ${dn} down → ${left}.`); } }
       // one line per trick: who played what, and the count after it
       const byTrick = [];
@@ -1013,10 +1022,24 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
         byTrick[byTrick.length - 1].plays.push(`${who(g.playSeat[i])} ${HP.label(c)}`);
       });
       byTrick.forEach((x) => { left -= x.plays.length; trail.push(`Trick ${x.k + 1}: ${x.plays.join(', ')} → ${left}.`); });
+      if (!byTrick.length) trail.push('None played by anyone else yet.');
       const max = kind === 'trumps' ? total - mine.length : g.d.copies;
       return { kind, word, answer: out, max, trail };
     }
     function who(seat) { return seat === ME ? 'You' : names[seat]; }
+    function focusKinds() {
+      const f = g.s.focus || 'bars';
+      const k = f === 'right' ? ['right'] : f === 'bars' ? ['right', 'left'] : f === 'trumps' ? ['right', 'left', 'trumps'] : ['right', 'left', 'trumps', 'void'];
+      if (g.s.bowers) return k;
+      // playing without bars: practice trumps instead
+      const nb = k.filter((x) => x !== 'right' && x !== 'left');
+      return nb.length ? nb : ['trumps'];
+    }
+    function pickOne(opts) {
+      const ok = focusKinds();
+      const o = opts.filter((x) => ok.indexOf(x.kind) >= 0);
+      return o.length ? o[Math.floor(Math.random() * o.length)] : null;
+    }
     function afterTrickQuestion() {
       const lt = g.lastTrick; if (!lt) return null;
       const cards = lt.cards, led = HP.effSuit(cards[0].card, g.trump, g.s);
@@ -1027,11 +1050,12 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
       if (l.length) opts.push(Object.assign(countQ('left'), { text: `${l.length === 1 ? 'That trick had a left bar' : `That trick had ${l.length} left bars`}. How many left bars are still out?` }));
       if (cut.length) opts.push(Object.assign(countQ('trumps'), { text: `${who(cut[0].seat)} trumped in. How many trumps are still out?` }));
       if (led === g.trump) opts.push(Object.assign(countQ('trumps'), { text: 'Trump was led. How many trumps are still out?' }));
-      return opts.length ? opts[Math.floor(Math.random() * opts.length)] : null;
+      return pickOne(opts);
     }
     function leadQuestion() {
       const hand = g.hands[ME], opts = [];
       if (g.s.bowers && hand.some((c) => isTr(c) && !isRight(c))) opts.push(Object.assign(countQ('right'), { text: 'Your lead. Before you play: how many right bars are still out?' }));
+      if (g.s.bowers && hand.some((c) => isTr(c) && !isRight(c) && !isLeft(c))) opts.push(Object.assign(countQ('left'), { text: 'Your lead. Before you play: how many left bars are still out?' }));
       if (hand.some(isTr)) opts.push(Object.assign(countQ('trumps'), { text: 'Your lead. How many trumps are still out?' }));
       // a side suit you could lead: who has shown they're out of it?
       const side = HP.SUITS.filter((su) => su !== g.trump && hand.some((c) => !isTr(c) && c.s === su));
@@ -1044,8 +1068,25 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
         const why = outs.map((p) => { const at = g.voidAt && g.voidAt[p][su]; return at ? `${who(p)} showed out on trick ${at.trick + 1} (played ${HP.label(at.card)} when ${HP.NAME[su].toLowerCase()} was led).` : `${who(p)} has shown out of ${HP.NAME[su].toLowerCase()}.`; });
         opts.push({ kind: 'void', suit: su, seats: seats.map((p) => ({ seat: p, name: who(p) })), answer: outs, text: `Your lead. Who has shown they're out of ${HP.NAME[su].toLowerCase()} ${HP.SYM[su]}?`, trail: why.length ? why : [`Nobody has failed to follow ${HP.NAME[su].toLowerCase()} yet.`] });
       }
-      return opts.length ? opts[Math.floor(Math.random() * opts.length)] : null;
+      return pickOne(opts);
     }
+    // the Count button: what's still out, for the kinds being practiced, with the count-down
+    self.counts = function () {
+      if (quiz || !g.trump || !g.playSeat) return null;
+      memFor().peeks++;
+      counting = true;
+      const kinds = focusKinds().filter((k) => k !== 'void');
+      const res = kinds.map((k) => { const q = countQ(k); return { kind: k, word: q.word, out: q.answer, trail: q.trail }; });
+      if (focusKinds().indexOf('void') >= 0) {
+        const seats = [1, 2, 3].filter((p) => p !== g.sitOut);
+        const lines = [];
+        seats.forEach((p) => HP.SUITS.forEach((su) => { if (su !== g.trump && g.voids[p][su]) lines.push(`${who(p)} is out of ${HP.NAME[su].toLowerCase()} ${HP.SYM[su]}`); }));
+        res.push({ kind: 'void', word: 'out of a suit', lines: lines.length ? lines : ['Nobody has shown out of a side suit yet.'] });
+      }
+      publish();
+      return res;
+    };
+    self.countDone = function () { if (!counting) return; counting = false; publish(); };
     self.tip = function () { if (quiz) return; tipOn = true; memFor().tips++; publish(); };
     self.answer = function (val) {
       if (!quiz || quiz.result) return;
@@ -1059,7 +1100,7 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
     self.quizDone = function () { quiz = null; publish(); };
     function schedule() {
       clearTimeout(timer);
-      if (quiz) return; // paused for a keep-count question
+      if (quiz || counting) return; // paused for a keep-count question or the Count screen
       const a = HP.pendingAuto(g, isHuman, () => self.level, 300);
       if (a) timer = setTimeout(() => { a.run(); publish(); }, a.ms);
     }
@@ -1241,6 +1282,9 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
     const d = v.d;
     $('bTip').hidden = !UI.ctrl.tip;
     $('bTip').disabled = !v.canTip;
+    $('bCount').hidden = !UI.ctrl.counts;
+    $('bCount').disabled = !v.canCount;
+    $('toolNote').textContent = v.mem && (v.mem.tips || v.mem.peeks) ? [v.mem.peeks ? `${v.mem.peeks} count check${v.mem.peeks === 1 ? '' : 's'}` : '', v.mem.tips ? `${v.mem.tips} tip${v.mem.tips === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ') + ' this hand' : '';
     $('usLbl').textContent = `You & ${v.names[2]}`.replace('& Partner', '& partner');
     $('themLbl').textContent = `${v.names[1]} & ${v.names[3]}`;
     $('sUs').textContent = v.scores[0];
@@ -1446,7 +1490,7 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
 
   /* ---------- sheets ---------- */
   function openSheet(html, kind) { const sh = $('sheet'); sh.innerHTML = html; sh.dataset.kind = kind || ''; $('ov').hidden = false; const f = sh.querySelector('button'); if (f) f.focus(); }
-  function closeSheet() { $('ov').hidden = true; }
+  function closeSheet() { const k = $('sheet').dataset.kind; $('ov').hidden = true; $('sheet').dataset.kind = ''; if (k === 'count' && UI.ctrl && UI.ctrl.countDone) UI.ctrl.countDone(); }
   const blocking = () => ['result', 'review'].indexOf($('sheet').dataset.kind) >= 0;
   $('ov').addEventListener('click', (e) => { if (e.target === $('ov') && !blocking()) closeSheet(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('ov').hidden && !blocking()) closeSheet(); });
@@ -1509,9 +1553,10 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
 
   function memLine(v) {
     const m = v.mem;
-    if (!m || (!m.asked && !m.tips)) return '';
+    if (!m || (!m.asked && !m.tips && !m.peeks)) return '';
     const parts = [];
-    if (m.asked) parts.push(`${m.right} of ${m.asked} count${m.asked === 1 ? '' : 's'} right`);
+    if (m.asked) parts.push(`${m.right} of ${m.asked} question${m.asked === 1 ? '' : 's'} right`);
+    parts.push(`${m.peeks || 0} count check${m.peeks === 1 ? '' : 's'}`);
     parts.push(`${m.tips} tip${m.tips === 1 ? '' : 's'}`);
     const hist = (v.memHistory || []).slice(-10), a = hist.reduce((x, y) => x + y.asked, 0), r = hist.reduce((x, y) => x + y.right, 0);
     const trend = hist.length >= 3 && a ? ` · last ${hist.length} hands: ${Math.round(100 * r / a)}% right` : '';
@@ -1576,13 +1621,15 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
       <ul>
         <li>Count down, not up. When trump is called, start at ${s.bowers ? `${d.copies} right bars, ${d.copies} left bars and ` : ''}${d.copies * (s.bowers ? d.ranks.length + 1 : d.ranks.length)} trumps, take off the ones in your hand, then subtract each one as it falls.</li>
         <li>When someone can't follow suit, remember it: they're out of that suit and can trump your aces in it.</li>
-        <li>The game asks now and then, right after a trick with a bar or a trump-in, or when it's your lead. Change how often in Settings.</li>
+        <li>Tap <b>Count</b> any time after trump is called to see what's still out and how the count got there.</li>
+        <li>The game asks now and then, right after a trick with a bar or a trump-in, or when it's your lead. In Settings, <b>Practice counting</b> picks what it asks about (start with the bars) and <b>Keep-count questions</b> sets how often.</li>
       </ul>
       <div class="row"><button class="abtn primary" id="bClose">Back to the game</button></div>`;
   }
   $('bRules').onclick = () => { openSheet(rulesHtml(UI.v.s), 'rules'); $('bClose').onclick = closeSheet; };
 
   const FIELDS = [
+    ['focus', 'Practice counting', [['right', 'Right bars only'], ['bars', 'Right and left bars'], ['trumps', 'Bars and trumps'], ['all', 'Everything: bars, trumps, who is out of a suit']], 'Start small. Move up when you get most questions right.'],
     ['memory', 'Keep-count questions', [['sometimes', 'Sometimes'], ['often', 'Often'], ['off', 'Off']]],
     ['level', 'Computer players', [['normal', 'Normal'], ['easy', 'Easy: careless, often plays a random card'], ['hard', 'Hard: plays out likely deals before each card']]],
     ['deck', 'Deck', [['J4', '64 cards (jack to ace, four decks): 15 each, 4 in the kitty'], ['64', '64 cards (7 to ace, two decks): 15 each, 4 in the kitty'], ['48', '48 cards (9 to ace, two decks): 12 each, no kitty'], ['32', '32 cards (jack to ace, two decks): 8 each, no kitty']]],
@@ -1620,6 +1667,16 @@ button.card { text-align: left; font: inherit; font-weight: 700; }
     if ($('bLeave')) $('bLeave').onclick = () => { closeSheet(); UI.ctrl.leave(); UI.ctrl = null; UI.v = null; showLobby(); };
   };
   $('bTip').onclick = () => { if (UI.ctrl.tip) UI.ctrl.tip(); };
+  $('bCount').onclick = () => {
+    if (!UI.ctrl.counts) return;
+    const res = UI.ctrl.counts();
+    if (!res) return;
+    const blocks = res.map((r) => r.kind === 'void'
+      ? `<div class="cnt"><div class="ttl">Who's out of a suit</div><ul>${r.lines.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>`
+      : `<div class="cnt"><div class="row1"><span class="ttl">${r.word[0].toUpperCase() + r.word.slice(1)} still out</span><span class="big">${r.out}</span></div><ul>${r.trail.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>`).join('');
+    openSheet(`<h2>Count</h2>${blocks}<p class="note">Count down: start at the total, take off yours, then one for each that falls. Saying the number under your breath helps it stick.</p><div class="row"><button class="abtn primary" id="bCountClose">Back to the game</button></div>`, 'count');
+    $('bCountClose').onclick = closeSheet;
+  };
 
   /* ---------- lobby ---------- */
   function startSolo(fresh) { UI.ctrl = SoloController(); showApp(); UI.ctrl.start(null, fresh); }

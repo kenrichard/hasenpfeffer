@@ -43,8 +43,14 @@ who has shown out of a suit. Two parts, both in the solo controller:
   count-down (start, minus your hand, minus each trick), because counting down is the habit
   being taught. "Still out" means not yet seen by you (`HP.unseen`). The engine records who
   played each card (`playSeat`, `playTrick`) and when each player showed out (`voidAt`).
-- The results screen shows "Keeping count: N of M right, K tips" and the last-10-hands rate
-  (`hp.memstats` in localStorage).
+- **Count** (button under the table, next to Tip) opens a screen with what's still out and the
+  count-down that got there. The game pauses while it's open. Count checks are counted, so Ken can
+  watch himself need it less.
+- **Practice counting** (`focus` setting) limits questions and the Count screen to one thing at a
+  time: right bars only, right and left bars (default), bars and trumps, or everything including
+  who's out of a suit. Ken asked to start with the bars.
+- The results screen shows "Keeping count: N of M questions right, C count checks, K tips" and the
+  last-10-hands rate (`hp.memstats` in localStorage).
 
 ## Hand review
 
