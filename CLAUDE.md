@@ -46,6 +46,14 @@ who has shown out of a suit. Two parts, both in the solo controller:
 - **Count** (button under the table, next to Tip) opens a screen with what's still out and the
   count-down that got there. The game pauses while it's open. Count checks are counted, so Ken can
   watch himself need it less.
+- **Tutorial** (toggle next to Tip and Count, saved as `hp.tutorial`, not a game setting, so it
+  doesn't restart the game) shows the tip for every choice and calls out the count as a pair,
+  rights then lefts ("Bars: 3-4, say three-four"), when trump is called and whenever a bar falls.
+  The trick waits for a tap while a call-out shows. In tutorial mode the call-out replaces the
+  after-trick question; lead questions still come. The player's own bars are "already counted".
+- **Help** (was Rules) opens with the counting tricks, then the rules. Bars don't get buried in
+  the kitty (nobody discards one); bars go unplayed only in a hoss sit-out hand or a set-aside
+  kitty.
 - **Practice counting** (`focus` setting) limits questions and the Count screen to one thing at a
   time: right bars only, right and left bars (default), bars and trumps, or everything including
   who's out of a suit. Ken asked to start with the bars.
